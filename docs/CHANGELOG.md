@@ -51,3 +51,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documents current state as of January 2026
 - Some endpoints (like `/api/pbp/game/{gameId}`) are expected by UI but not yet implemented
 
+

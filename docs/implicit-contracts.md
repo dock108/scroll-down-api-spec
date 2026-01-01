@@ -278,3 +278,4 @@ These implicit contracts should be:
 2. ⚠️ Enforced via backend validation where possible
 3. 🔄 Reviewed when making breaking changes
 
+
