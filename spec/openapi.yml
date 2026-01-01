@@ -1,0 +1,1441 @@
+openapi: 3.0.3
+info:
+  title: Scroll Down Sports API
+  description: |
+    API specification for Scroll Down Sports platform.
+    
+    This API serves:
+    - Scroll Down Web (React/TypeScript)
+    - Future Scroll Down iOS App (SwiftUI)
+    - Admin interfaces
+    
+    ## Authentication
+    Currently no authentication required for read endpoints.
+    Admin/write endpoints may require auth in future.
+    
+    ## Rate Limiting
+    Rate limiting is applied per IP address.
+    See response headers for current limits.
+  version: 1.0.0
+  contact:
+    name: API Support
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://api.scrolldown.sports
+    description: Production (future)
+
+tags:
+  - name: games
+    description: Game data and details
+  - name: teams
+    description: Team information
+  - name: social
+    description: Social media posts (X/Twitter)
+  - name: pbp
+    description: Play-by-play events
+  - name: scraper
+    description: Data scraper management (admin)
+
+paths:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # GAMES
+  # ─────────────────────────────────────────────────────────────────────────────
+  
+  /api/admin/sports/games:
+    get:
+      operationId: listGames
+      summary: List games with filtering
+      description: |
+        Returns a paginated list of games with optional filters.
+        Results are ordered by game_date descending (most recent first).
+      tags:
+        - games
+      parameters:
+        - name: league
+          in: query
+          description: Filter by league code(s)
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [NBA, NCAAB, NFL, NCAAF, MLB, NHL]
+          style: form
+          explode: true
+        - name: season
+          in: query
+          description: Filter by season year
+          schema:
+            type: integer
+            example: 2025
+        - name: team
+          in: query
+          description: Filter by team name (partial match)
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: Filter games on or after this date
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: Filter games on or before this date
+          schema:
+            type: string
+            format: date
+        - name: missingBoxscore
+          in: query
+          description: Only games without boxscore data
+          schema:
+            type: boolean
+            default: false
+        - name: missingPlayerStats
+          in: query
+          description: Only games without player stats
+          schema:
+            type: boolean
+            default: false
+        - name: missingOdds
+          in: query
+          description: Only games without odds data
+          schema:
+            type: boolean
+            default: false
+        - name: missingSocial
+          in: query
+          description: Only games without social posts
+          schema:
+            type: boolean
+            default: false
+        - name: missingAny
+          in: query
+          description: Only games missing any data type
+          schema:
+            type: boolean
+            default: false
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          description: Number of results to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of games
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/admin/sports/games/{gameId}:
+    get:
+      operationId: getGame
+      summary: Get game details
+      description: |
+        Returns full game details including:
+        - Game metadata
+        - Team and player stats
+        - Odds data
+        - Social posts
+        - Play-by-play events
+        - Derived metrics
+      tags:
+        - games
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Game details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/sports/games/{gameId}/rescrape:
+    post:
+      operationId: rescrapeGame
+      summary: Trigger game rescrape
+      description: Enqueues a background job to rescrape boxscore data for this game.
+      tags:
+        - games
+        - scraper
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/sports/games/{gameId}/resync-odds:
+    post:
+      operationId: resyncGameOdds
+      summary: Resync game odds
+      description: Enqueues a background job to resync odds data for this game.
+      tags:
+        - games
+        - scraper
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # TEAMS
+  # ─────────────────────────────────────────────────────────────────────────────
+  
+  /api/admin/sports/teams:
+    get:
+      operationId: listTeams
+      summary: List teams
+      description: Returns a paginated list of teams with optional filters.
+      tags:
+        - teams
+      parameters:
+        - name: league
+          in: query
+          description: Filter by league code
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Search by name/abbreviation
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of teams
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamListResponse'
+
+  /api/admin/sports/teams/{teamId}:
+    get:
+      operationId: getTeam
+      summary: Get team details
+      description: Returns team details including recent games.
+      tags:
+        - teams
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+      responses:
+        '200':
+          description: Team details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/sports/teams/{teamId}/social:
+    get:
+      operationId: getTeamSocialInfo
+      summary: Get team social info
+      description: Returns team's social media info including X handle.
+      tags:
+        - teams
+        - social
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+      responses:
+        '200':
+          description: Team social info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamSocialInfo'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # SOCIAL POSTS
+  # ─────────────────────────────────────────────────────────────────────────────
+  
+  /api/social/posts:
+    get:
+      operationId: listSocialPosts
+      summary: List social posts
+      description: Returns social posts with optional filters.
+      tags:
+        - social
+      parameters:
+        - name: game_id
+          in: query
+          description: Filter by game ID
+          schema:
+            type: integer
+        - name: team_id
+          in: query
+          description: Filter by team abbreviation
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          description: Filter posts on or after this timestamp
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          description: Filter posts on or before this timestamp
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of social posts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialPostListResponse'
+
+    post:
+      operationId: createSocialPost
+      summary: Create social post
+      description: Creates a new social post linked to a game.
+      tags:
+        - social
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialPostCreateRequest'
+      responses:
+        '201':
+          description: Post created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialPostResponse'
+        '404':
+          description: Game or team not found
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Post URL already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/social/posts/game/{gameId}:
+    get:
+      operationId: getPostsForGame
+      summary: Get posts for a game
+      description: |
+        Returns all social posts for a specific game.
+        Posts are sorted by posted_at ascending (chronological order).
+      tags:
+        - social
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Posts for game
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialPostListResponse'
+
+  /api/social/posts/bulk:
+    post:
+      operationId: bulkCreateSocialPosts
+      summary: Bulk create social posts
+      description: Creates multiple social posts. Skips duplicates by URL.
+      tags:
+        - social
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - posts
+              properties:
+                posts:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SocialPostCreateRequest'
+      responses:
+        '201':
+          description: Posts created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialPostListResponse'
+
+  /api/social/posts/{postId}:
+    delete:
+      operationId: deleteSocialPost
+      summary: Delete social post
+      description: Deletes a social post by ID.
+      tags:
+        - social
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Post deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PLAY-BY-PLAY
+  # ─────────────────────────────────────────────────────────────────────────────
+  
+  /api/pbp/game/{gameId}:
+    get:
+      operationId: getPbpForGame
+      summary: Get play-by-play for game
+      description: |
+        Returns play-by-play events for a specific game.
+        Events are sorted by elapsed_seconds ascending (chronological order).
+        
+        **Note**: This endpoint is planned. Currently PBP is included in game details.
+      tags:
+        - pbp
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: PBP events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PbpResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # SCRAPER MANAGEMENT
+  # ─────────────────────────────────────────────────────────────────────────────
+  
+  /api/admin/sports/scraper/runs:
+    get:
+      operationId: listScrapeRuns
+      summary: List scrape runs
+      description: Returns recent scrape job runs.
+      tags:
+        - scraper
+      parameters:
+        - name: league
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, completed, failed, canceled]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: List of scrape runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScrapeRunResponse'
+
+    post:
+      operationId: createScrapeRun
+      summary: Create scrape run
+      description: Creates and enqueues a new scrape job.
+      tags:
+        - scraper
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScrapeRunCreateRequest'
+      responses:
+        '200':
+          description: Scrape run created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapeRunResponse'
+        '404':
+          description: League not found
+          $ref: '#/components/responses/NotFound'
+        '500':
+          description: Failed to enqueue job
+
+  /api/admin/sports/scraper/runs/{runId}:
+    get:
+      operationId: getScrapeRun
+      summary: Get scrape run
+      description: Returns details for a specific scrape run.
+      tags:
+        - scraper
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Scrape run details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapeRunResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/admin/sports/scraper/runs/{runId}/cancel:
+    post:
+      operationId: cancelScrapeRun
+      summary: Cancel scrape run
+      description: Cancels a pending or running scrape job.
+      tags:
+        - scraper
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Run canceled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapeRunResponse'
+        '400':
+          description: Run cannot be canceled (not pending/running)
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+components:
+  parameters:
+    GameId:
+      name: gameId
+      in: path
+      required: true
+      description: Game ID
+      schema:
+        type: integer
+
+    TeamId:
+      name: teamId
+      in: path
+      required: true
+      description: Team ID
+      schema:
+        type: integer
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    # ─────────────────────────────────────────────────────────────────────────
+    # COMMON
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Error message
+      required:
+        - detail
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # GAME MODELS
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    GameSummary:
+      type: object
+      description: Game summary for list views
+      properties:
+        id:
+          type: integer
+        league_code:
+          type: string
+          enum: [NBA, NCAAB, NFL, NCAAF, MLB, NHL]
+        game_date:
+          type: string
+          format: date-time
+        home_team:
+          type: string
+          description: Full team name
+        away_team:
+          type: string
+          description: Full team name
+        home_score:
+          type: integer
+          nullable: true
+        away_score:
+          type: integer
+          nullable: true
+        has_boxscore:
+          type: boolean
+        has_player_stats:
+          type: boolean
+        has_odds:
+          type: boolean
+        has_social:
+          type: boolean
+        has_pbp:
+          type: boolean
+        play_count:
+          type: integer
+        social_post_count:
+          type: integer
+        has_required_data:
+          type: boolean
+          description: Has both boxscore and odds
+        scrape_version:
+          type: integer
+          nullable: true
+        last_scraped_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - league_code
+        - game_date
+        - home_team
+        - away_team
+
+    GameListResponse:
+      type: object
+      properties:
+        games:
+          type: array
+          items:
+            $ref: '#/components/schemas/GameSummary'
+        total:
+          type: integer
+          description: Total matching games
+        next_offset:
+          type: integer
+          nullable: true
+          description: Next page offset (null if no more pages)
+        with_boxscore_count:
+          type: integer
+        with_player_stats_count:
+          type: integer
+        with_odds_count:
+          type: integer
+        with_social_count:
+          type: integer
+        with_pbp_count:
+          type: integer
+      required:
+        - games
+        - total
+
+    GameMeta:
+      type: object
+      description: Full game metadata
+      properties:
+        id:
+          type: integer
+        league_code:
+          type: string
+        season:
+          type: integer
+        season_type:
+          type: string
+          nullable: true
+        game_date:
+          type: string
+          format: date-time
+        home_team:
+          type: string
+        away_team:
+          type: string
+        home_score:
+          type: integer
+          nullable: true
+        away_score:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [scheduled, completed, postponed, canceled]
+        scrape_version:
+          type: integer
+          nullable: true
+        last_scraped_at:
+          type: string
+          format: date-time
+          nullable: true
+        has_boxscore:
+          type: boolean
+        has_player_stats:
+          type: boolean
+        has_odds:
+          type: boolean
+        has_social:
+          type: boolean
+        has_pbp:
+          type: boolean
+        play_count:
+          type: integer
+        social_post_count:
+          type: integer
+        home_team_x_handle:
+          type: string
+          nullable: true
+        away_team_x_handle:
+          type: string
+          nullable: true
+      required:
+        - id
+        - league_code
+        - season
+        - game_date
+        - home_team
+        - away_team
+        - status
+
+    GameDetailResponse:
+      type: object
+      description: Full game detail response
+      properties:
+        game:
+          $ref: '#/components/schemas/GameMeta'
+        team_stats:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamStat'
+        player_stats:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerStat'
+        odds:
+          type: array
+          items:
+            $ref: '#/components/schemas/OddsEntry'
+        social_posts:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialPostEntry'
+        plays:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayEntry'
+        derived_metrics:
+          type: object
+          additionalProperties: true
+          description: Computed metrics from game data
+        raw_payloads:
+          type: object
+          additionalProperties: true
+          description: Raw source data for debugging
+      required:
+        - game
+        - team_stats
+        - player_stats
+        - odds
+        - social_posts
+        - plays
+        - derived_metrics
+        - raw_payloads
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # STATS MODELS
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    TeamStat:
+      type: object
+      description: Team boxscore statistics
+      properties:
+        team:
+          type: string
+          description: Team name
+        is_home:
+          type: boolean
+        stats:
+          type: object
+          additionalProperties: true
+          description: Flexible stats object (varies by sport)
+        source:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - team
+        - is_home
+        - stats
+
+    PlayerStat:
+      type: object
+      description: Player boxscore statistics
+      properties:
+        team:
+          type: string
+        player_name:
+          type: string
+        minutes:
+          type: number
+          nullable: true
+          description: Minutes played (decimal)
+        points:
+          type: integer
+          nullable: true
+        rebounds:
+          type: integer
+          nullable: true
+        assists:
+          type: integer
+          nullable: true
+        yards:
+          type: integer
+          nullable: true
+          description: Football only
+        touchdowns:
+          type: integer
+          nullable: true
+          description: Football only
+        raw_stats:
+          type: object
+          additionalProperties: true
+          description: Full raw stats from source
+        source:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - team
+        - player_name
+        - raw_stats
+
+    OddsEntry:
+      type: object
+      description: Betting odds entry
+      properties:
+        book:
+          type: string
+          description: Sportsbook name
+        market_type:
+          type: string
+          enum: [spread, moneyline, total]
+        side:
+          type: string
+          nullable: true
+          description: Team or over/under
+        line:
+          type: number
+          nullable: true
+        price:
+          type: number
+          nullable: true
+          description: American odds format
+        is_closing_line:
+          type: boolean
+        observed_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - book
+        - market_type
+        - is_closing_line
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SOCIAL POST MODELS
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    MediaType:
+      type: string
+      enum: [video, image, none]
+      description: Type of media in the post
+
+    SocialPostEntry:
+      type: object
+      description: Social post in game detail
+      properties:
+        id:
+          type: integer
+        post_url:
+          type: string
+          format: uri
+        posted_at:
+          type: string
+          format: date-time
+        has_video:
+          type: boolean
+        team_abbreviation:
+          type: string
+        tweet_text:
+          type: string
+          nullable: true
+        video_url:
+          type: string
+          format: uri
+          nullable: true
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+        source_handle:
+          type: string
+          nullable: true
+        media_type:
+          $ref: '#/components/schemas/MediaType'
+      required:
+        - id
+        - post_url
+        - posted_at
+        - has_video
+        - team_abbreviation
+
+    SocialPostResponse:
+      type: object
+      description: Social post API response
+      properties:
+        id:
+          type: integer
+        game_id:
+          type: integer
+        team_id:
+          type: string
+          description: Team abbreviation
+        post_url:
+          type: string
+          format: uri
+        posted_at:
+          type: string
+          format: date-time
+        has_video:
+          type: boolean
+        video_url:
+          type: string
+          format: uri
+          nullable: true
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+        tweet_text:
+          type: string
+          nullable: true
+        source_handle:
+          type: string
+          nullable: true
+        media_type:
+          $ref: '#/components/schemas/MediaType'
+      required:
+        - id
+        - game_id
+        - team_id
+        - post_url
+        - posted_at
+        - has_video
+
+    SocialPostListResponse:
+      type: object
+      properties:
+        posts:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialPostResponse'
+        total:
+          type: integer
+      required:
+        - posts
+        - total
+
+    SocialPostCreateRequest:
+      type: object
+      properties:
+        gameId:
+          type: integer
+        teamAbbreviation:
+          type: string
+        postUrl:
+          type: string
+          format: uri
+        postedAt:
+          type: string
+          format: date-time
+        hasVideo:
+          type: boolean
+          default: false
+        videoUrl:
+          type: string
+          format: uri
+          nullable: true
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+        tweetText:
+          type: string
+          nullable: true
+        sourceHandle:
+          type: string
+          nullable: true
+        mediaType:
+          $ref: '#/components/schemas/MediaType'
+      required:
+        - gameId
+        - teamAbbreviation
+        - postUrl
+        - postedAt
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PLAY-BY-PLAY MODELS
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    PlayEntry:
+      type: object
+      description: Play-by-play event
+      properties:
+        play_index:
+          type: integer
+          description: Ordered index of the play
+        quarter:
+          type: integer
+          nullable: true
+          description: Period/quarter (1-4, 5+ for OT)
+        game_clock:
+          type: string
+          nullable: true
+          description: "Time remaining in period (MM:SS format)"
+        play_type:
+          type: string
+          nullable: true
+          description: Event type classification
+          enum:
+            - shot
+            - made_shot
+            - missed_shot
+            - rebound
+            - assist
+            - turnover
+            - steal
+            - block
+            - foul
+            - free_throw
+            - timeout
+            - substitution
+            - jump_ball
+            - period_start
+            - period_end
+            - game_end
+            - highlight
+            - play
+        team_abbreviation:
+          type: string
+          nullable: true
+        player_name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        home_score:
+          type: integer
+          nullable: true
+        away_score:
+          type: integer
+          nullable: true
+      required:
+        - play_index
+
+    PbpEvent:
+      type: object
+      description: PBP event (detailed)
+      properties:
+        id:
+          oneOf:
+            - type: string
+            - type: integer
+        game_id:
+          oneOf:
+            - type: string
+            - type: integer
+        period:
+          type: integer
+          nullable: true
+        game_clock:
+          type: string
+          nullable: true
+        elapsed_seconds:
+          type: number
+          nullable: true
+        event_type:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        team:
+          type: string
+          nullable: true
+        team_id:
+          type: string
+          nullable: true
+        player_name:
+          type: string
+          nullable: true
+        player_id:
+          oneOf:
+            - type: string
+            - type: integer
+          nullable: true
+        home_score:
+          type: integer
+          nullable: true
+        away_score:
+          type: integer
+          nullable: true
+
+    PbpResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/PbpEvent'
+      required:
+        - events
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # TEAM MODELS
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    TeamSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        shortName:
+          type: string
+        abbreviation:
+          type: string
+        leagueCode:
+          type: string
+        gamesCount:
+          type: integer
+      required:
+        - id
+        - name
+        - shortName
+        - abbreviation
+        - leagueCode
+        - gamesCount
+
+    TeamListResponse:
+      type: object
+      properties:
+        teams:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamSummary'
+        total:
+          type: integer
+      required:
+        - teams
+        - total
+
+    TeamGameSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        gameDate:
+          type: string
+        opponent:
+          type: string
+        isHome:
+          type: boolean
+        score:
+          type: string
+          description: "Format: team_score-opponent_score"
+        result:
+          type: string
+          enum: [W, L, "-"]
+      required:
+        - id
+        - gameDate
+        - opponent
+        - isHome
+        - score
+        - result
+
+    TeamDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        shortName:
+          type: string
+        abbreviation:
+          type: string
+        leagueCode:
+          type: string
+        location:
+          type: string
+          nullable: true
+        externalRef:
+          type: string
+          nullable: true
+        xHandle:
+          type: string
+          nullable: true
+        xProfileUrl:
+          type: string
+          format: uri
+          nullable: true
+        recentGames:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamGameSummary'
+      required:
+        - id
+        - name
+        - shortName
+        - abbreviation
+        - leagueCode
+        - recentGames
+
+    TeamSocialInfo:
+      type: object
+      properties:
+        teamId:
+          type: integer
+        abbreviation:
+          type: string
+        xHandle:
+          type: string
+          nullable: true
+        xProfileUrl:
+          type: string
+          format: uri
+          nullable: true
+      required:
+        - teamId
+        - abbreviation
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SCRAPER MODELS
+    # ─────────────────────────────────────────────────────────────────────────
+    
+    ScrapeRunConfig:
+      type: object
+      properties:
+        leagueCode:
+          type: string
+        season:
+          type: integer
+          nullable: true
+        seasonType:
+          type: string
+          default: regular
+        startDate:
+          type: string
+          format: date
+          nullable: true
+        endDate:
+          type: string
+          format: date
+          nullable: true
+        boxscores:
+          type: boolean
+          default: true
+        odds:
+          type: boolean
+          default: true
+        social:
+          type: boolean
+          default: false
+        pbp:
+          type: boolean
+          default: false
+        onlyMissing:
+          type: boolean
+          default: false
+        updatedBefore:
+          type: string
+          format: date
+          nullable: true
+        books:
+          type: array
+          items:
+            type: string
+          nullable: true
+      required:
+        - leagueCode
+
+    ScrapeRunCreateRequest:
+      type: object
+      properties:
+        config:
+          $ref: '#/components/schemas/ScrapeRunConfig'
+        requestedBy:
+          type: string
+          nullable: true
+      required:
+        - config
+
+    ScrapeRunResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        league_code:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed, canceled]
+        scraper_type:
+          type: string
+        season:
+          type: integer
+          nullable: true
+        start_date:
+          type: string
+          format: date
+          nullable: true
+        end_date:
+          type: string
+          format: date
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        requested_by:
+          type: string
+          nullable: true
+        config:
+          type: object
+          additionalProperties: true
+          nullable: true
+      required:
+        - id
+        - league_code
+        - status
+        - scraper_type
+        - created_at
+
+    JobResponse:
+      type: object
+      properties:
+        run_id:
+          type: integer
+        job_id:
+          type: string
+          nullable: true
+        message:
+          type: string
+      required:
+        - run_id
+        - message
+
