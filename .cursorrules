@@ -95,3 +95,4 @@ OpenAPI specification defining the contract between Scroll Down backend and clie
 - Coordinate with consumer repos before breaking changes
 - Prefer additive changes (new optional fields) over modifications
 
+
